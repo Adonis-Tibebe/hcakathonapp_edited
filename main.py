@@ -18,6 +18,8 @@ from flask import abort
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("FLASK_KEY")
+CORS(app, origins=["http://localhost:5173", "https://yosephghiday.github.io"], supports_credentials=True)
+
 
 
 login_manager = LoginManager()
@@ -103,7 +105,6 @@ with app.app_context():
     db.create_all()
 
 @app.route("/signup", methods=["POST"])
-@cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
 def signup():
     data = request.get_json()
     fname = data.get("fname")
@@ -149,7 +150,6 @@ def signup():
 
 
 @app.route("/login",  methods=["POST"])
-@cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
 def login():
     data = request.get_json()
     phonenumber = data.get("phonenumber")
@@ -182,7 +182,6 @@ def login():
 
 
 @app.route("/getuser", methods=["POST"])
-@cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
 def get_user():
     data = request.get_json()
     token = data.get("token")
@@ -207,7 +206,6 @@ def get_user():
 
 
 @app.route("/transaction", methods=["POST"])
-@cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
 def transaction():
     data = request.get_json()
     if not data:
