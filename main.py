@@ -190,13 +190,49 @@ def get_user():
 
 @app.route("/transaction", methods=["POST"])
 @cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
-def transacion():
-    data = request.get_json()
+def transaction():  # Fixed spelling
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
 
+        # Validate required fields
+        required_fields = ["uid", "amount", "service", "paymetmethod"]
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
 
+        user_id = data["uid"]
+        amount = data["amount"]
+        service = data["service"]
+        payment_method = data["paymetmethod"]  # Note: Typo in field name ('paymetmethod' vs 'paymentmethod')
 
+        # Get user
+        user = db.session.execute(db.select(User).where(User.uid == user_id)).scalar()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
+        # Create transaction
+        new_transaction = Transaction(
+            amount=amount,
+            paymentMethod=payment_method,
+            service=service,
+            user_id=user.uid
+        )
+        db.session.add(new_transaction)
 
+        # Update customer level
+        transaction_count = len(user.transactions) + 1  # +1 because we haven't committed yet
+        if transaction_count >= 10:
+            user.customer_level = CustomerLevel.LEVEL3
+        elif transaction_count >= 5:
+            user.customer_level = CustomerLevel.LEVEL2
+
+        db.session.commit()  # Fixed: db.session.commit() instead of db.commit()
+        return jsonify({"message": "Transaction successfully saved"})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
 
