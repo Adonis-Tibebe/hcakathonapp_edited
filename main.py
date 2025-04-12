@@ -9,8 +9,11 @@ from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+from enum import Enum
+from sqlalchemy import Enum as SqlEnum
 import secrets
-
+from flask_cors import CORS, cross_origin
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("FLASK_KEY")
@@ -18,6 +21,8 @@ app.config["SECRET_KEY"] = os.environ.get("FLASK_KEY")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -27,6 +32,17 @@ def load_user(user_id):
     except (ValueError, TypeError):
         return None  # Invalid UUID format
 
+class MembershipTier(Enum):  # Define possible roles
+    NULL = None
+    GOLD = "GOLD"
+    DIAMOND = "DIAMOND"
+    PLATINUM = "PLATINUM"
+
+class CustomerLevel(Enum):
+    LEVEL1 = 1
+    LEVEL2 = 2
+    LEVEL3 = 3
+
 
 
 class Base(DeclarativeBase):
@@ -34,6 +50,7 @@ class Base(DeclarativeBase):
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", "sqlite:///users.db")
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
+migrate = Migrate(app, db)
 
 
 class User(UserMixin, db.Model):
@@ -45,9 +62,15 @@ class User(UserMixin, db.Model):
     password: Mapped[str] = mapped_column(String(100))
     phone_number: Mapped[str] = mapped_column(String(100))
     token: Mapped[str] = mapped_column(String(100), nullable=True)
-    balance: Mapped[float] = mapped_column(Float)
 
     # Use the same name as back_populates in Transaction ("transactions")
+    membership_tier: Mapped[MembershipTier] = mapped_column(SqlEnum(MembershipTier),nullable=False,default=MembershipTier.NULL)
+    customer_level: Mapped[CustomerLevel] = mapped_column(
+        SqlEnum(CustomerLevel),  # Database enum type
+        nullable=False,
+        default=CustomerLevel.LEVEL1  # Default to lowest tier
+    )
+    balance: Mapped[float] = mapped_column(Float)
     transactions = relationship("Transaction", back_populates="user")
 
     def __repr__(self):
@@ -56,6 +79,8 @@ class User(UserMixin, db.Model):
     def get_id(self):
         return str(self.uid)
 
+with app.app_context():
+    db.create_all()
 
 class Transaction(db.Model):
     __tablename__ = 'transactions'
@@ -77,6 +102,7 @@ with app.app_context():
     db.create_all()
 
 @app.route("/signup", methods=["POST"])
+@cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
 def signup():
     data = request.get_json()
     fname = data.get("fname")
@@ -112,6 +138,7 @@ def signup():
 
 
 @app.route("/login",  methods=["POST"])
+@cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
 def login():
     data = request.get_json()
     phonenumber = data.get("phonenumber")
@@ -139,6 +166,7 @@ def login():
 
 
 @app.route("/getuser", methods=["POST"])
+@cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
 def get_user():
     data = request.get_json()
     token = data.get("token")
@@ -158,6 +186,14 @@ def get_user():
             })
     else:
         return jsonify({"message": "access token invalid"})
+
+
+@app.route("/transaction", methods=["POST"])
+@cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
+def transacion():
+    data = request.get_json()
+
+
 
 
 
