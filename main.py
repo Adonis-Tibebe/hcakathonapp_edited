@@ -166,7 +166,8 @@ def login():
             "phonenumber": user.phone_number,
             "token": user.token,
             "balance": user.balance,
-            "membership": user.membership_tier
+            "membership": user.membership_tier,
+            "customer_level": user.customer_level
         })
 
 
