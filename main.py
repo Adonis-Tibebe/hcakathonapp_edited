@@ -114,10 +114,10 @@ def signup():
     result = db.session.execute(db.select(User).where(User.phone_number == phonenumber))
     user = result.scalar()
     if not fname or not lname or not phonenumber or not password:
-        return jsonify({"error": "Missing required field"})
+        abort(401, description="Missing required field")
     elif user:
         # User already exists
-        return jsonify({"error":"user already exists"})
+        abort(401, description="user already exists")
     else:
         hash_and_salted_password = generate_password_hash(
             password,
@@ -135,7 +135,17 @@ def signup():
         )
         db.session.add(new_user)
         db.session.commit()
-        return jsonify({"message":"signup successful!!"})
+        result = db.session.execute(db.select(User).where(User.phone_number == phonenumber))
+        user = result.scalar()
+        return jsonify({
+            "firstName": user.fName,
+            "lastName": user.lName,
+            "phonenumber": user.phone_number,
+            "token": user.token,
+            "balance": user.balance,
+            "membership": user.membership_tier.value,
+            "customer_level": user.customer_level.value
+        })
 
 
 @app.route("/login",  methods=["POST"])
@@ -166,8 +176,8 @@ def login():
             "phonenumber": user.phone_number,
             "token": user.token,
             "balance": user.balance,
-            "membership": user.membership_tier,
-            "customer_level": user.customer_level
+            "membership": user.membership_tier.value,
+            "customer_level": user.customer_level.value
         })
 
 
@@ -182,14 +192,16 @@ def get_user():
 
 
     if user and token == str(user.token):  # Convert user.token to string for comparison
-            return jsonify({
-                "user_id": str(user.uid),
-                "firstName": user.fName,
-                "lastName": user.lName,
-                "phonenumber": user.phone_number,
-                "token": str(user.token),# Ensure token is returned as string
-                "status": "success"
-            })
+        return jsonify({
+            "user_id": user.uid,
+            "firstName": user.fName,
+            "lastName": user.lName,
+            "phonenumber": user.phone_number,
+            "token": str(user.token),
+            "balance": user.balance,
+            "membership": user.membership_tier.value,
+            "customer_level": user.customer_level.value
+        })
     else:
         return jsonify({"message": "access token invalid"})
 
@@ -197,43 +209,48 @@ def get_user():
 @app.route("/transaction", methods=["POST"])
 @cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
 def transaction():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
 
-        # Validate required fields
-        required_fields = ["uid", "amount", "service", "payment"]
-        if not all(field in data for field in required_fields):
-            return jsonify({"error": "Missing required fields"}), 400
+    try:
+        user_id = uuid.UUID(data.get("uid", ""))
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid user ID format"}), 400
 
-        user_id = data["uid"]
-        amount = data["amount"]
-        service = data["service"]
-        payment_method = data["payment"]  # Note: Typo in field name ('paymetmethod' vs 'paymentmethod')
+    amount = data.get("amount")
+    service = data.get("service")
+    payment_method = data.get("payment")
 
-        # Get user
-        user = db.session.execute(db.select(User).where(User.uid == user_id)).scalar()
-        if not user:
-            return jsonify({"error": "User not found"}), 404
+    # Check all fields
+    if not all([user_id, amount, service, payment_method]):
+        return jsonify({"error": "Missing required fields"}), 400
 
-        # Create transaction
-        new_transaction = Transaction(
-            amount=amount,
-            paymentMethod=payment_method,
-            service=service,
-            user_id=user.uid
-        )
-        db.session.add(new_transaction)
+    # Get user
+    user = db.session.execute(db.select(User).where(User.uid == user_id)).scalar()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
 
-        # Update customer level
-        transaction_count = len(user.transactions) + 1  # +1 because we haven't committed yet
-        if transaction_count >= 10:
-            user.customer_level = CustomerLevel.LEVEL3
-        elif transaction_count >= 5:
-            user.customer_level = CustomerLevel.LEVEL2
+    # Create transaction
+    new_transaction = Transaction(
+        amount=amount,
+        paymentMethod=payment_method,
+        service=service,
+        user_id=user.uid
+    )
+    db.session.add(new_transaction)
 
-        db.session.commit()  # Fixed: db.session.commit() instead of db.commit()
-        return jsonify({"message": "Transaction successfully saved"})
+    # Update customer level
+    transaction_count = len(user.transactions) + 1
+    if transaction_count >= 10:
+        user.customer_level = CustomerLevel.LEVEL3
+    elif transaction_count >= 5:
+        user.customer_level = CustomerLevel.LEVEL2
+
+    user.balance += 1
+    db.session.commit()
+
+    return jsonify({"message": "Transaction successfully saved"})
 
 
 
