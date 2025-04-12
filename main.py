@@ -14,6 +14,7 @@ from sqlalchemy import Enum as SqlEnum
 import secrets
 from flask_cors import CORS, cross_origin
 from flask_migrate import Migrate
+from flask import abort
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("FLASK_KEY")
@@ -113,7 +114,7 @@ def signup():
     result = db.session.execute(db.select(User).where(User.phone_number == phonenumber))
     user = result.scalar()
     if not fname or not lname or not phonenumber or not password:
-        return jsonify({"error": "Missing required field"}), 400
+        return jsonify({"error": "Missing required field"})
     elif user:
         # User already exists
         return jsonify({"error":"user already exists"})
@@ -147,9 +148,12 @@ def login():
     result = db.session.execute(db.select(User).where(User.phone_number == phonenumber))
     user = result.scalar()
     if not user:
-        return jsonify({"error": "error occured"})
+        abort(401, description="User not found. Please check the phone number.")
+
+
     elif not check_password_hash(user.password, password):
-        return jsonify({"message": "password is not correct"})
+        abort(401, description="User not found. Please check the phone number.")
+
     else:
         login_user(user)
         Token = secrets.token_hex(16)
