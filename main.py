@@ -130,7 +130,7 @@ def signup():
             password=hash_and_salted_password,
             phone_number=phonenumber,
             token = Token,
-            balance=0.0  # Explicitly set
+            balance=0.0,# Explicitly set
         )
         db.session.add(new_user)
         db.session.commit()
@@ -146,9 +146,8 @@ def login():
 
     result = db.session.execute(db.select(User).where(User.phone_number == phonenumber))
     user = result.scalar()
-
     if not user:
-        return jsonify({"message": "account does not exist signup"})
+        return jsonify({"error": "error occured"})
     elif not check_password_hash(user.password, password):
         return jsonify({"message": "password is not correct"})
     else:
@@ -161,7 +160,9 @@ def login():
             "firstName": user.fName,
             "lastName": user.lName,
             "phonenumber": user.phone_number,
-            "token": user.token
+            "token": user.token,
+            "balance": user.balance,
+            "membership": user.membership_tier
         })
 
 
@@ -190,21 +191,20 @@ def get_user():
 
 @app.route("/transaction", methods=["POST"])
 @cross_origin(origins=["http://localhost:5173", "https://yosephghiday.github.io"])
-def transaction():  # Fixed spelling
-    try:
+def transaction():
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
 
         # Validate required fields
-        required_fields = ["uid", "amount", "service", "paymetmethod"]
+        required_fields = ["uid", "amount", "service", "payment"]
         if not all(field in data for field in required_fields):
             return jsonify({"error": "Missing required fields"}), 400
 
         user_id = data["uid"]
         amount = data["amount"]
         service = data["service"]
-        payment_method = data["paymetmethod"]  # Note: Typo in field name ('paymetmethod' vs 'paymentmethod')
+        payment_method = data["payment"]  # Note: Typo in field name ('paymetmethod' vs 'paymentmethod')
 
         # Get user
         user = db.session.execute(db.select(User).where(User.uid == user_id)).scalar()
@@ -230,9 +230,6 @@ def transaction():  # Fixed spelling
         db.session.commit()  # Fixed: db.session.commit() instead of db.commit()
         return jsonify({"message": "Transaction successfully saved"})
 
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
 
 
 
